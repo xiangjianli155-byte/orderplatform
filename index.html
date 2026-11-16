@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fa">
+  <meta name="description" content="Browser-based Excel order and supply chain analysis dashboard">
+  <title>订单分析</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-4.1.1.min.js" charset="utf-8"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs/dist/pptxgen.bundle.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="订单分析首页">
+      <span class="brand-mark" aria-hidden="true">OA</span>
+      <span><strong>订单分析</strong><small>供应链规划工作台</small></span>
+    </a>
+    <div class="privacy-note"><span class="privacy-dot"></span>文件在当前浏览器中处理</div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro-row">
+      <div>
+        <p class="eyebrow">SUPPLY CHAIN PLANNING</p>
+        <h1>订单分析</h1>
+        <p class="intro-copy">导入工作簿，查看逾期未结订单、数量缺口和数据质量。</p>
+      </div>
+      <div id="fileSummary" class="file-summary hidden"></div>
+    </section>
+
+    <section id="uploadCard" class="upload-card">
+      <div id="dropZone" class="drop-zone">
+        <div class="upload-icon" aria-hidden="true">↑</div>
+        <div>
+          <h2>上传 Excel 工作簿</h2>
+          <p>拖放文件到这里，或从电脑中选择。支持 XLSX、XLS、XLSM、XLSB 和 CSV。</p>
+        </div>
+        <label class="button button-primary" for="fileInput">选择文件</label>
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv" hidden>
+      </div>
+      <div id="loadMessage" class="message hidden" role="status"></div>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <section class="control-panel" aria-label="工作簿设置">
+        <label class="control-field">
+          <span>分析模式</span>
+          <select id="modeSelect">
+            <option value="orders">客户订单与交付</option>
+            <option value="generic">通用表格分析</option>
+          </select>
+        </label>
+        <label class="control-field">
+          <span>工作表</span>
+          <select id="sheetSelect"></select>
+        </label>
+        <label class="control-field compact-field">
+          <span>表头所在行</span>
+          <input id="headerRowInput" type="number" min="1" max="100" value="1">
+        </label>
+        <label class="control-field">
+          <span>报告截至日期</span>
+          <input id="reportDateInput" type="date">
+        </label>
+        <label id="profileField" class="control-field profile-field">
+          <span>载入字段映射（可选）</span>
+          <input id="profileInput" type="file" accept=".json">
+        </label>
+        <button id="replaceFileButton" class="button button-secondary" type="button">更换文件</button>
+      </section>
+
+      <nav class="tabbar" aria-label="分析页面">
+        <button class="tab-button active" data-view="mappingView" type="button">字段映射</button>
+        <button class="tab-button" data-view="dashboardView" type="button">分析看板</button>
+        <button class="tab-button" data-view="reportView" type="button">PPT 报告</button>
+      </nav>
+
+      <section id="mappingView" class="view-panel">
+        <div class="section-heading">
+          <div>
+            <h2 id="mappingTitle">核对工作表字段</h2>
+            <p id="mappingDescription" class="muted">系统会建议表头行和常见业务字段，你可以按当前工作簿调整。</p>
+          </div>
+          <button id="downloadMappingButton" class="button button-secondary" type="button">下载映射配置 JSON</button>
+        </div>
+        <div id="orderMappingPanel" class="mapping-grid"></div>
+        <div id="genericSchemaPanel" class="hidden"></div>
+        <details class="preview-details">
+          <summary>预览当前工作表（前 30 行）</summary>
+          <div id="sourcePreview" class="table-wrap"></div>
+        </details>
+        <div id="analysisNotice" class="message hidden" role="status"></div>
+      </section>
+
+      <section id="dashboardView" class="view-panel hidden">
+        <div id="orderDashboard">
+          <div class="section-heading dashboard-heading">
+            <div>
+              <h2>逾期订单看板</h2>
+              <p id="dashboardCaption" class="muted"></p>
+            </div>
+            <div class="dashboard-filters">
+              <label class="inline-field"><span>客户</span><select id="customerFilter"></select></label>
+              <label class="inline-field"><span>交付状态</span><select id="statusFilter"><option value="逾期">逾期</option></select></label>
+              <label class="inline-field"><span>承运商</span><select id="carrierFilter"></select></label>
+              <label class="inline-field search-field"><span>订单 / 料号</span><input id="orderSearch" type="search" placeholder="输入关键词"></label>
+            </div>
+          </div>
+          <div class="metric-grid four-metrics">
+            <article class="metric-card"><span>未结订单行</span><strong id="metricOpenLines">—</strong></article>
+            <article class="metric-card"><span>未结数量</span><strong id="metricOpenQty">—</strong></article>
+            <article class="metric-card alert-metric"><span>逾期未结数量</span><strong id="metricOverdueQty">—</strong></article>
+            <article class="metric-card"><span>7 天内到期数量</span><strong id="metricDueSoonQty">—</strong></article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="panel chart-panel">
+              <div class="panel-heading"><h3>按交期周查看未结数量</h3><span>最近 16 周</span></div>
+              <div id="orderChart" class="chart"></div>
+            </article>
+            <article class="panel quality-panel">
+              <div class="panel-heading"><h3>数据质量提示</h3></div>
+              <div id="qualitySummary" class="quality-list"></div>
+            </article>
+          </div>
+          <article class="panel table-panel">
+            <div class="panel-heading table-heading">
+              <div><h3>订单行待办</h3><span id="tableResultCount" class="muted"></span></div>
+              <button id="downloadOrderCsv" class="button button-secondary" type="button">下载当前筛选 CSV</button>
+            </div>
+            <div id="orderTable" class="table-wrap"></div>
+          </article>
+        </div>
+
+        <div id="genericDashboard" class="hidden">
+          <div class="section-heading"><div><h2>通用表格分析</h2><p class="muted">按任意分类字段汇总可识别的数值字段。</p></div></div>
+          <div class="generic-controls panel">
+            <label class="control-field"><span>按什么分类</span><select id="genericDimension"></select></label>
+            <label class="control-field"><span>汇总哪列数字</span><select id="genericMeasure"></select></label>
+            <label class="control-field"><span>汇总方式</span><select id="genericAggregation"><option value="求和">求和</option><option value="平均值">平均值</option><option value="计数">计数</option></select></label>
+            <label class="control-field"><span>搜索行内容</span><input id="genericSearch" type="search" placeholder="输入关键词"></label>
+          </div>
+          <div class="metric-grid three-metrics">
+            <article class="metric-card"><span>数据行数</span><strong id="genericRowsMetric">—</strong></article>
+            <article class="metric-card"><span>分类数量</span><strong id="genericCategoriesMetric">—</strong></article>
+            <article class="metric-card"><span id="genericMetricLabel">指标值</span><strong id="genericValueMetric">—</strong></article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="panel chart-panel"><div class="panel-heading"><h3>分类汇总</h3><span>数值最高的 20 个分类</span></div><div id="genericChart" class="chart"></div></article>
+            <article class="panel quality-panel"><div class="panel-heading"><h3>数据检查</h3></div><div id="genericQuality" class="quality-list"></div></article>
+          </div>
+          <article class="panel table-panel">
+            <div class="panel-heading table-heading"><div><h3>原始明细</h3><span id="genericTableCount" class="muted"></span></div><button id="downloadGenericCsv" class="button button-secondary" type="button">下载当前筛选 CSV</button></div>
+            <div id="genericTable" class="table-wrap"></div>
+          </article>
+          <article class="panel table-panel"><div class="panel-heading table-heading"><h3>分类汇总结果</h3><button id="downloadGenericGroupedCsv" class="button button-secondary" type="button">下载分类汇总 CSV</button></div><div id="genericGroupedTable" class="table-wrap"></div></article>
+        </div>
+      </section>
+
+      <section id="reportView" class="view-panel hidden">
+        <div class="section-heading"><div><h2>导出 PowerPoint 报告</h2><p class="muted">报告使用当前工作表、日期、字段映射和筛选结果生成。</p></div></div>
+        <article class="panel report-panel">
+          <div class="report-icon" aria-hidden="true">PPT</div>
+          <div><h3 id="reportTitle">订单履约报告</h3><p id="reportDescription" class="muted">包含履约概览、交期趋势、优先订单行和数据质量说明。</p></div>
+          <button id="generatePptButton" class="button button-primary" type="button">生成并下载 PPTX</button>
+        </article>
+        <div id="reportMessage" class="message hidden" role="status"></div>
+      </section>
+    </section>
+
+    <footer class="page-footer"><span>订单分析</span><span>Excel 在本地浏览器中解析，不会由此页面上传到服务器。</span></footer>
+  </main>
+</body>
+</html>
+
