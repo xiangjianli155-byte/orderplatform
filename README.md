@@ -1,61 +1,46 @@
 # 订单分析
 
-这是一个在电脑本地运行的 Streamlit 应用。它有两种分析模式：订单履约模式用于客户未结订单和交期风险；通用表格模式允许按任意分类列汇总可识别的数值列。当前筛选结果可以导出为可编辑 PowerPoint。
+一个可部署到 GitHub Pages 的浏览器端供应链订单分析应用。界面使用 HTML、CSS 和 JavaScript；Excel 文件在用户的浏览器中解析，不会由应用发送到服务器。
 
-## 当前功能
+## GitHub Pages 部署
 
-- 上传 .xlsx、.xls、.xlsm、.xlsb 工作簿并选择工作表。
-- 自动建议表头行和业务字段；表头位置和字段映射都可以手动调整。
-- 对其他结构化 Excel 使用“通用表格分析”，自行选择分类字段、数值字段和求和/平均/计数方式。
-- 将不同列名映射为客户、订单号、PO 行、物料号、未结量、欠交量、交期等统一字段。
-- 如果文件没有未结数量，可用原始订单数量减去已发货数量推算。
-- 按客户、承运商、交期状态和订单/料号搜索筛选。
-- 查看未结量、逾期未结量、7 天内到期量和交期周趋势。
-- 检查缺少交期、重复订单行键和数量字段无法核对等数据问题。
-- 下载当前订单明细 CSV 和字段映射 JSON。
-- 生成订单履约报告或通用分析报告。PPTX 中的图表使用 PowerPoint 原生图表。
+本仓库的网页入口位于根目录：`index.html`。
 
-## 安装与启动（Windows / VS Code）
+1. 打开仓库 **Settings → Pages**。
+2. 在 **Build and deployment** 中选择 **Deploy from a branch**。
+3. 选择 `main` 分支和 `/(root)` 文件夹，然后保存。
+4. 等 Pages 完成发布后访问：<https://xiangjianli155-byte.github.io/orderplatform/>。
 
-建议使用 Python 3.10 或以上版本。
+提交到 `main` 的更新会自动触发 Pages 重新发布。
 
-1. 在 VS Code 中打开本文件所在文件夹。
-2. 打开 VS Code 终端，创建虚拟环境：
+## 功能
 
-    python -m venv .venv
+- 上传 `.xlsx`、`.xls`、`.xlsm`、`.xlsb` 或 `.csv`，并选择工作表和表头行。
+- 自动建议常见客户、订单、料号、数量和交期字段；支持手动映射及 JSON 映射配置导入/导出。
+- 订单模式按报告日期计算未结订单状态；交付状态筛选当前只提供“逾期”。
+- 按客户、承运商和订单/料号搜索；查看未结量、逾期未结量、交期周趋势和数据质量检查。
+- 订单待办表沿用 Excel 原始列名，附带应用生成的 `Status` 和 `Excel Row`。
+- 通用模式支持按分类字段汇总数字列，可求和、平均或计数。
+- 下载筛选明细和分类汇总 CSV；生成含可编辑原生图表的 PowerPoint 报告。
 
-3. 激活环境并安装依赖：
+网页使用 SheetJS、Plotly.js 和 PptxGenJS 浏览器版本，这些库由 CDN 加载；使用时需要网络连接。应用不重算 Excel 公式，也不会执行宏。若工作簿单元格使用公式，请先在 Excel 中打开并保存，使公式结果可供读取。
 
-    .\.venv\Scripts\Activate.ps1
-    python -m pip install --upgrade pip
-    python -m pip install -r requirements.txt
+## 本地运行 Python 版本（可选）
 
-4. 在 VS Code 中选择 .venv 作为 Python Interpreter。
-5. 启动应用：
+仓库仍保留原有 Streamlit 版本。需要 Python 3.10 或以上版本：
 
-    python -m streamlit run app.py
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
 
-浏览器会打开本机的工作台页面。退出时回到终端按 Ctrl+C。
+若 PowerShell 策略不允许激活虚拟环境，可像上面一样直接使用 `.venv\Scripts\python.exe`。浏览器端 GitHub Pages 版本不需要安装 Python 依赖。
 
-如果 PowerShell 不允许激活虚拟环境，可以直接运行：
+## 分析口径
 
-    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-    .\.venv\Scripts\python.exe -m streamlit run app.py
-
-## 日常使用
-
-1. 在左侧选择“客户订单与交付”或“通用表格分析”，上传 Excel，选择工作表和表头行。
-2. 订单模式下核对系统建议的字段映射；不同格式的文件可各自调整映射，之前下载的 JSON 可以载入复用。
-3. 通用模式下选择分类列、数值列和汇总方式。
-4. 在“分析看板”页筛选、查看明细，再到“PPT 报告”页生成并下载 PowerPoint。
-
-系统按 Excel 行保留来源位置，方便回到原表核对。报告日期决定逾期和近期到期的计算。
-
-## 口径说明
-
-- “未结数量”优先使用源表已有的未结数量。只有在缺少该列时，才使用“原始订单数量 - 已发货数量”，并将负值按 0 计。
-- “欠交、预留、已拣”作为独立字段展示。除非 ERP 口径确认这些数互不重叠，否则不要把它们相加或用它们反推未结量。
-- 只有订单未结量和交期时，可以看未结需求及逾期风险。要计算实际发货或准时交付率，需要可靠的发货数量和实际发货/交付日期，并确认每行代表订单行还是发运事件。
-- 本版本一次处理一份工作簿中的一个工作表。跨多个文件的自动关联尚未包含；若实际发货数据在另一份文件中，需要先准备共同订单行键再扩展关联流程。
-- 加密文件、宏执行、复杂公式重算和图片化报表不在本版本范围内。若 Excel 单元格含公式，请先在 Excel 中打开并保存，确保公式结果已计算。
+- “未结数量”优先使用源表字段；若没有，则按“原始订单数量 - 已发货数量”计算，并将负值按 0 处理。
+- 逾期条件为未结数量大于 0，且承诺/修订交期早于报告截至日期。
+- 欠交、预留和已拣数量作为独立字段展示。若 ERP 口径未确认互不重叠，不应将它们相加或用于反推未结数量。
+- 只有未结数量和交期时，可以识别逾期未结订单；要确认实际迟交或计算准时交付率，需要可靠的实际发运/交付数据。
 
